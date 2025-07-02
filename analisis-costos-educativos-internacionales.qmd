@@ -1,0 +1,771 @@
+---
+title: "Análisis de Costos Educativos Internacionales"
+author: "Ramiro Crespi"
+format: html
+editor: visual
+---
+
+# Análisis de Costos Educativos Internacionales
+
+------------------------------------------------------------------------
+
+## Librerias e Importaciones necesarias
+
+```{r}
+library(tidyverse)
+library(modelr)
+library(ggridges)
+source("styles.R")
+```
+
+# Carga y visualizacion inicial
+
+```{r}
+df = read_csv("data/International_Education_Costs.csv")
+glimpse(df)
+colnames(df)
+head(df)
+```
+
+# Limpieza, adecuacion y filtrado
+
+```{r}
+#Verificacion de datos faltantes o duplicados
+
+sum(duplicated(df)) sum(is.na(df))
+
+unique(df$Country)
+unique(df$Program)
+
+#Sino las universidades gratuitas serian outliers en los graficos y afectarian los modelos
+
+df = df %>% filter(Tuition_USD > 0)
+```
+
+# Agrupacion de paises por region
+
+```{r}
+df <- df %>%
+  mutate(region = case_when(
+    Country %in% c(
+      "USA", "Canada", "Mexico", "Brazil", "Colombia", "Peru", "Ecuador", 
+      "Uruguay", "Panama", "Dominican Republic", "El Salvador"
+    ) ~ "America",
+    
+    Country %in% c("UK", "Germany", "Netherlands", "France", "Switzerland", "Ireland", 
+                   "Austria", "Belgium", "Portugal", "Spain", "Italy", "Luxembourg", "Denmark") ~ "Europa Occidental",
+    
+    Country %in% c("Czech Republic", "Poland", "Russia", "Greece", "Hungary", "Romania", 
+                   "Cyprus", "Croatia", "Bulgaria", "Ukraine", "Slovenia", "Serbia") ~ "Europa del Este",
+    
+    Country %in% c(
+      "Japan", "China", "South Korea", "India", "Thailand", "Vietnam", "Malaysia", "Indonesia", 
+      "Bangladesh", "Singapore", "Hong Kong", "Taiwan", "Uzbekistan", "Turkey", "Iran", 
+      "Israel", "Lebanon", "Saudi Arabia", "UAE", "Bahrain", "Kuwait"
+    ) ~ "Asia",
+    
+    Country %in% c(
+      "South Africa", "Egypt", "Nigeria", "Morocco", "Tunisia", "Ghana", "Algeria"
+    ) ~ "Africa",
+    
+    Country %in% c("Australia", "New Zealand") ~ "Oceania",
+    
+    
+    TRUE ~ NA_character_  # Para los que no entren en ninguna categoría
+  ))
+```
+
+### Agregamos columna con categoria del programa - agrupacion
+
+```{r}
+df <- df %>%
+  mutate(category = case_when(
+    Program %in% c("Computer Science", "Data Science", "Business Analytics", "Information Science", "Artificial Intelligence", 
+                   "Computer Engineering", "Digital Media", "Data Analytics", "Software Engineering", "Information Systems",
+                   "Information Technology", "Software Development", "Computing Science", "Data Engineering", "Software Systems",
+                   "Digital Engineering", "Robotics & AI", "Cybersecurity", "Computing Systems", "Software Science", "Game Technology",
+                   "Bioinformatics", "Computer Science & Design", "Data Science & AI", "Technology & Innovation", "Computing & Innovation",
+                   "Digital Systems & AI", "Digital Systems", "Business Informatics", "Computational Science", "Digital Innovation",
+                   "Robotics Engineering", "AI Engineering", "Computer Systems", "Information Security", "Computer Networks", 
+                   "Machine Learning", "Environmental Computing", "Computing") ~ "IT",
+    
+    Program %in% c("Engineering", "Mechanical Engineering", "Aerospace Engineering", "Industrial Engineering", "Chemical Engineering",
+                   "Architecture", "Electronics Engineering", "Electrical Engineering", "Robotics", "Robotics Engineering", "Mechatronics") ~ "Engineering",
+    
+    Program %in% c("Marine Biology", "Biomedical Sciences", "Medicine", "Molecular Biology", "Pharmaceutical Sciences", "Climate Science",
+                   "Chemistry", "Environmental Science", "Biotechnology", "Bioinformatics", "Physics", "Applied Mathematics") ~ "Natural & Life Sciences",
+    
+    TRUE ~ "Other"
+  ))
+
+# Verificacion
+df %>% filter(Program == "Other")
+```
+
+# Agregamos la matricula por año
+
+```{r}
+df = df %>% mutate(Tuition_per_year = Tuition_USD / Duration_Years)
+```
+
+# Analisis exploratorio Inicial - Presentacion y Distribuiones basicas de los datos
+
+```{r}
+df %>%
+  ggplot(aes(x = category, fill = category)) +
+  geom_bar() +
+  geom_text(stat = "count", aes(label = ..count..), vjust = -0.5) +
+  theme +
+  labs(title = 'Cantidad de Programas por Categoría', x='Categoría', y='Cantidad de Programas')
+
+df %>% ggplot(aes(x=fct_infreq(Level), fill=Level))+
+  scale_fill_manual(values = my_colors)+
+  geom_bar()+
+  labs(
+    title = "Cantidad de Programas por
+    Nivel Educativo",
+    x = "Nivel del Programa",
+    y = "Cantidad de Programas",
+    fill = "Nivel"
+  )+ 
+  theme
+
+df %>% ggplot(aes(x=fct_infreq(region), fill=region))+
+  scale_fill_manual(values = region_colors )+
+  geom_bar()+
+  labs(
+    title = "Cantidad de Programas por region",
+    x = "Region",
+    y = "Cantidad de Programas"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", size = 16, hjust = 0.5),
+    plot.title.position = 'plot',
+    axis.title.x = element_text(face = "bold", size = 11),
+    axis.title.y = element_text(face = "bold", size = 11),
+    axis.text = element_text(size = 12, color = "black"),
+    legend.position = "none",
+    panel.grid.major.y = element_line(color = "grey90"),
+    panel.grid.minor = element_blank(),
+  )
+
+
+df %>% ggplot(aes(x=Level,y=Tuition_USD, fill=Level))+
+  geom_boxplot()
+
+df %>% ggplot(aes(x=Level,y=Tuition_per_year, fill=Level))+
+  geom_boxplot(outlier.shape = 21, outlier.fill = "white", outlier.color = "black")+
+  labs(x='Matrícula por año', y='Nivel educativo', title='Matricula en funcion
+       del nivel educativo')
+
+#options(scipen = 9)
+
+df %>% ggplot(aes(x=Level, fill=factor(Duration_Years)))+
+  geom_bar(position='fill')+
+  labs(title='Duración de cada Nivel Educativo',x='Nivel Educativo', y='Proporción', fill = 'Duración en años')+
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", size = 16, hjust = 0.5),
+    plot.title.position = 'plot',
+    axis.title.x = element_text(face = "bold", size = 11),
+    axis.title.y = element_text(face = "bold", size = 11),
+    axis.text = element_text(size = 12, color = "black"),
+    panel.grid.major.y = element_line(color = "grey90"),
+    panel.grid.minor = element_blank(),
+  )
+
+anios_raros = df %>% filter(Duration_Years %in% c(1.5, 2.5))
+anios_raros
+
+df$Country
+paises_americanos = df %>% filter(region == 'America')
+view(paises_americanos)
+
+#
+ggplot(df, aes(x = Tuition_USD, y = region, fill = region)) +
+  geom_density_ridges(alpha = 0.7) +
+  labs(x='Matricula (USD)', y='Region', title='Matricula separada por region')+
+  theme(legend.position = 'none')
+
+df %>% ggplot(aes(x=fct_reorder(region, Living_Cost_Index, .fun=median), y=Living_Cost_Index, fill=region))+
+  geom_boxplot(outlier.colour = 'black', outlier.fill = 'white', outlier.shape = 21, outlier.size = 2)+
+  labs(title='Costo de vida segun region', x='Region', y='Costo de vida')+
+  theme(legend.position = 'none')+
+  theme_minimal()
+
+df %>% ggplot(aes(x=fct_reorder(region, Rent_USD, .fun=median), y=Rent_USD, fill=region))+
+  geom_boxplot(outlier.colour = 'black', outlier.fill = 'white', outlier.shape = 21, outlier.size = 2)+
+  labs(title='Costo de alquiler segun region', x='Region', y='Costo de alquiler')+
+  theme(legend.position = 'none')+
+  theme_minimal()
+
+
+ggplot(df, aes(x = Tuition_USD)) +
+  geom_density(binwidth=2000, fill = "skyblue", color = "black", alpha = 0.7) +
+  labs(title = "Distribución de la matrícula",
+       x = "Matrícula por año (USD)", y = "Densidad") +
+  theme_minimal()
+
+ggplot(df, aes(x = Level, y = Tuition_USD, fill = Level)) +
+  geom_boxplot() +
+  scale_fill_brewer(palette = "Set1") +
+  labs(
+    title = "Distribución de Matrículas por
+    Nivel Educativo",
+    x = "Nivel",
+    y = "Matrícula (USD)",
+    fill = "Nivel"
+  ) +
+  theme_minimal()
+
+ggplot(df, aes(x = Level, y = Tuition_per_year, fill = Level)) +
+  geom_boxplot() +
+  scale_fill_brewer(palette = "Set1") +
+  labs(
+    title = "Distribución de Matrículas por
+    Nivel Educativo",
+    x = "Nivel",
+    y = "Matrícula (USD)",
+    fill = "Nivel"
+  )
+```
+
+## Fin de la parte decriptiva, desde aca empezamos a buscar relaciones
+
+```{r}
+df %>% ggplot(aes(x=Living_Cost_Index, y=Tuition_USD))+
+  geom_point(,alpha=0.4, color='#800020')+
+  geom_smooth(method='lm')+
+  labs(title='Matrícula en función del 
+       Indice de Costo de Vida', 
+       x='Indice de Costo de Vida', y='Matricula (USD)')+
+  theme
+
+df %>% ggplot(aes(x=Living_Cost_Index, y=Tuition_USD, color=factor(Level)))+
+  geom_point(,alpha=0.4)+
+  labs(title='Matrícula en función del 
+       Indice de Costo de Vida', 
+       x='Indice de Costo de Vida', y='Matricula (USD)', color='Nivel Educativo')+
+  theme+
+  theme(legend.position = 'right')
+
+df %>% ggplot(aes(x=Visa_Fee_USD, y=Tuition_USD))+
+  geom_point(,alpha=0.4, color='#800020')+
+  geom_smooth(method='lm')+
+  labs(title='Matrícula en función del 
+       Indice de Costo de Vida', 
+       x='Indice de Costo de Vida', y='Matricula (USD)')+
+  theme
+
+
+df %>% ggplot(aes(x=Living_Cost_Index, y=Tuition_USD, color=category))+
+  geom_point(alpha=0.4)+
+  facet_wrap(~category) +
+  labs(title='Matrícula en función del Indice de Costo de Vida', 
+       x='Indice de Costo de Vida', y='Matricula (USD)', color='Nivel Educativo')+
+  theme
+
+
+df %>% ggplot(aes(x=Living_Cost_Index, y=Tuition_USD, color=region))+
+  geom_point(,alpha=0.3)+
+  labs(title='Matrícula en función del 
+       Indice de Costo de Vida', 
+       x='Indice de Costo de Vida', y='Matricula (USD)')
+
+
+df %>% ggplot(aes(x=Living_Cost_Index, y=Tuition_USD, color=region))+
+  geom_point(,alpha=0.2)+
+  facet_wrap(~region)+
+  labs(title='Matrícula en función del 
+       Indice de Costo de Vida', 
+       x='Indice de Costo de Vida', y='Matricula (USD)')+
+  theme(legend.position = 'none')
+
+df %>% ggplot(aes(x=Living_Cost_Index, y=Tuition_USD, color=region))+
+  geom_point(,alpha=0.2)+
+  labs(title='Matrícula en función del 
+       Indice de Costo de Vida', 
+       x='Indice de Costo de Vida', y='Matricula (USD)')
+
+df %>% ggplot(aes(x=Rent_USD, y=Tuition_USD, color=region))+
+  geom_point(,alpha=0.2)+
+  labs(title='Matrícula en función del 
+       Indice de Costo de Vida', 
+       x='Indice de Costo de Vida', y='Matricula (USD)')
+
+df %>% ggplot(aes(x=fct_reorder(region,Tuition_USD, .fun = median), y=Tuition_USD, fill=region))+
+  geom_boxplot(outlier.colour = 'black', outlier.fill = 'white', outlier.size = 2, outlier.shape = 21)+
+  labs(title='Matricula segun region', x='Region', y='Matricula')+
+  theme(axis.text.x = element_text(angle = 45, hjust=1), legend.position = 'none')
+theme_minimal()
+
+####
+
+# este filtrado tiene los puntos con costos de vida altos y matriculas bajas
+filtrado1 = df %>% filter(Tuition_USD < 10000, Living_Cost_Index > 75)
+filtrado1 %>% ggplot(aes(x=Living_Cost_Index, y=Tuition_USD, color= Country))+
+  labs(title='Matricula en función del Costo de Vida', x='Indice de Costo de Vida', y='Matricula (USD)', color='País')+
+  geom_point()+
+  theme +
+  theme(legend.position = 'right')
+
+# este tambien pero es mas agresivo
+filtrado2 = df %>% filter(Tuition_USD < 2300, Living_Cost_Index > 50)
+filtrado2 %>% ggplot(aes(x=Living_Cost_Index, y=Tuition_USD, color=Country))+
+  geom_point()
+
+# Esos puntos con Indice de costo de vida tan alto y El costo de la universidad tan bajo (en comparacion)
+# Son outliers pero son puntos reales, no errores de tipeo ni nada, corresponden a Suiza
+indices_altos = df %>% filter(Living_Cost_Index > 100, Tuition_USD < 20000)
+indices_altos
+
+
+df %>% ggplot(aes(x=Rent_USD, y=Tuition_USD))+
+  geom_point(,alpha=0.5, color='navy')+
+  geom_smooth(method='lm', color='firebrick')+
+  labs(title='Matricula en funcion de el
+       Costo de Alquiler',
+       x='Costo de Alquiler (USD)',
+       y='Matricula (USD)')+
+  annotate("text", x = 2000, y = 8000, label = "Suiza(14) - Francia(2)", 
+           color = "#800020", size = 3, fontface = "bold")+
+  theme
+
+alquileres_filtrados = df %>% filter(Rent_USD > 1700, Tuition_USD < 8000)
+view(alquileres_filtrados)
+
+df_europa = df %>% filter(region %in% c('Europa Occidental','Europa del Este'))
+
+df_europa %>% ggplot(aes(x=Living_Cost_Index, y=Tuition_USD, color=region))+
+  geom_point(,alpha=0.5)+
+  geom_smooth(method='lm', color='firebrick')+
+  labs(title='Matricula en funcion de el
+       Costo de Alquiler',
+       x='Costo de Alquiler (USD)',
+       y='Matricula (USD)')
+
+df_europa %>% ggplot(aes(x=Rent_USD, y=Tuition_USD, color=region))+
+  geom_point(,alpha=0.5)+
+  geom_smooth(method='lm', color='firebrick')+
+  labs(title='Matricula en funcion de el
+       Costo de Alquiler',
+       x='Costo de Alquiler (USD)',
+       y='Matricula (USD)')
+
+###
+df_bajos = df %>% filter(Tuition_USD < 15000)
+
+df_bajos %>% ggplot(aes(x=Living_Cost_Index, y=Tuition_USD, color=region))+
+  facet_wrap(~region)+
+  geom_point()+
+  labs(title='Matricula segun Costo de Vida segmentado por Region', y='Matrícula(USD)', x='Indice de Costo de Vida', subtitle = 'Matriculas menores a 15000 USD')+
+  theme
+
+df_bajos %>% ggplot(aes(x=Living_Cost_Index, y=Tuition_USD, color=Level))+
+  facet_wrap(~Level)+
+  geom_point() 
+
+
+df_bajos %>% ggplot(aes(x=Living_Cost_Index, y=Tuition_USD, color=region))+
+  geom_point() 
+
+# este contiene los que tienen renta muy cara y matriculas bajas
+filtrado3 = df %>% filter(Tuition_USD < 10000, Rent_USD > 1000) 
+filtrado3 %>% ggplot(aes(x=Rent_USD, y=Tuition_USD)) +
+  geom_point()
+
+# Estos puntos tambien corresponden en su mayoria a Suiza, al parecer es un caso especial
+alquileres_caros = df %>% filter(Rent_USD > 800, Tuition_USD < 2500)
+alquileres_caros
+unique(alquileres_caros$Country) 
+
+
+# Aca pareceria haber como varios grupos de insurance, uno al rededor de 1500
+# y otro al rededor de 600 pero mas disperso
+df %>% ggplot(aes(x=Insurance_USD, y=Tuition_USD))+
+  geom_jitter(, alpha=0.4)
+
+
+df %>% ggplot(aes(x=Visa_Fee_USD, y=Tuition_per_year))+
+  #facet_wrap(~Level)+
+  geom_jitter(,alpha=0.4)+
+  labs(title='Matricula en funcion
+       de el impuesto', x='Visa Fee', y='Matricula por año')
+
+```
+
+## Modelado
+
+```{r}
+mod1 = lm(Tuition_USD ~ Living_Cost_Index, data=df)
+summary(mod1)
+
+grilla1 = df %>% select(Living_Cost_Index, Tuition_USD) %>% add_predictions(model = mod1) %>% 
+  add_residuals(model = mod1)
+
+grilla1 %>% ggplot(aes(x=pred,y=resid))+
+  geom_point()+
+  geom_abline(slope = 0, linetype='dashed',color='red')
+
+mod2 =lm(Tuition_USD ~ poly(Living_Cost_Index,2), data=df)
+summary(mod2)
+
+grilla2 = df %>% select(Living_Cost_Index, Tuition_USD) %>% add_predictions(model = mod2) %>% 
+  add_residuals(model = mod2)
+
+grilla2%>% ggplot(aes(x=pred,y=resid))+
+  geom_point()+
+  geom_abline(slope = 0, linetype='dashed',color='red')
+
+anova(mod1,mod2)
+
+##########
+
+mod3 = lm(Tuition_USD ~ poly(Living_Cost_Index,2) + factor(region) , data=df)
+
+mod3.5 = lm(Tuition_USD ~ poly(Living_Cost_Index,2) + factor(Country) , data=df)
+
+summary(mod3)
+anova(mod3,mod3.5)
+
+grilla3 = df %>% select(Living_Cost_Index, Tuition_USD, Country) %>% add_predictions(model = mod3) %>% 
+  add_residuals(model = mod3)
+
+grilla3%>% ggplot(aes(x=pred,y=resid))+
+  geom_point()+
+  geom_abline(slope = 0, linetype='dashed',color='red')
+
+anova(mod1,mod2, mod3)
+
+##############
+
+mod4 = lm(Tuition_USD ~ poly(Living_Cost_Index,2) + factor(Country) + factor(Level) , data=df)
+
+summary(mod4)
+
+grilla4 = df %>% select(Living_Cost_Index, Tuition_USD, Country, Level) %>% add_predictions(model = mod4) %>% 
+  add_residuals(model = mod4)
+
+grilla4%>% ggplot(aes(x=pred,y=resid))+
+  geom_point()+
+  geom_abline(slope = 0, linetype='dashed',color='red')
+
+anova(mod1,mod2, mod3, mod4)
+
+##############
+
+mod5 = lm(Tuition_USD ~ poly(Living_Cost_Index,2) + factor(Country) + factor(Level) + Rent_USD , data=df)
+
+summary(mod5)
+
+grilla5 = df %>% select(Living_Cost_Index, Tuition_USD, Country, Level, Rent_USD) %>%
+  add_predictions(model = mod5) %>% 
+  add_residuals(model = mod5)
+
+grilla5 %>% ggplot(aes(x=pred,y=resid))+
+  geom_point()+
+  geom_abline(slope = 0, linetype='dashed',color='red')
+
+anova(mod1,mod2, mod3, mod4, mod5)
+
+##############
+
+mod6 = lm(Tuition_USD ~ poly(Living_Cost_Index,2) + factor(Country) * factor(Level) + Rent_USD, data=df)
+
+summary(mod6)
+
+grilla6 = df %>% 
+  select(Living_Cost_Index, Tuition_USD, Country, Level, Rent_USD, Insurance_USD) %>%
+  add_predictions(model = mod6) %>% 
+  add_residuals(model = mod6)
+
+grilla6 %>% ggplot(aes(x=pred,y=resid))+
+  geom_point()+
+  geom_abline(slope = 0, linetype='dashed',color='red')
+
+outlier = grilla6 %>% filter(pred > 30000, resid < -20000)
+outlier
+singapore = df %>% filter(Country == 'Singapore')
+singapore
+
+anova(mod1,mod2, mod3, mod4, mod5,mod6)
+
+##############
+
+mod7 = lm(Tuition_USD ~ poly(Living_Cost_Index,2) * factor(Country) + factor(Level) + Rent_USD, data=df)
+
+summary(mod7)
+
+grilla7 = df %>% 
+  select(Living_Cost_Index, Tuition_USD, Country, Level, Rent_USD, Insurance_USD) %>%
+  add_predictions(model = mod7) %>% 
+  add_residuals(model = mod7)
+
+grilla7 %>% ggplot(aes(x=pred,y=resid))+
+  geom_point()+
+  geom_abline(slope = 0, linetype='dashed',color='red')
+
+anova(mod1,mod2, mod3, mod4, mod5,mod6, mod7)
+
+##############
+
+mod8 = lm(Tuition_USD ~ poly(Living_Cost_Index,2) * factor(Country)
+          * factor(Level) + Rent_USD, data=df)
+
+summary(mod8)
+
+grilla8 = df %>% 
+  select(Living_Cost_Index, Tuition_USD, Country, Level, Rent_USD, Insurance_USD) %>%
+  add_predictions(model = mod8) %>% 
+  add_residuals(model = mod8)
+
+grilla8 %>% ggplot(aes(x=pred,y=resid))+
+  geom_point()+
+  geom_abline(slope = 0, linetype='dashed',color='red')
+
+
+
+grilla8 %>% ggplot(aes(x = pred, y = Tuition_USD)) +
+  geom_point(alpha = 0.6) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  labs(x = "Predicción", y = "Valor Real", title = "Predicción vs Valor Real")
+
+anova(mod1,mod2, mod3, mod4, mod5,mod6, mod8)
+```
+
+### Agregamos la variable idh del dataset de la ONU
+
+```{r}
+df_idh= read_csv("data/HDR25_Composite_indices_complete_time_series.csv")
+
+df_idh = df_idh %>% select(country, hdi_2023)
+
+unique(df_idh$country)
+
+df_idh = df_idh %>%
+  rename(Country = country )
+
+df_idh = df_idh %>%  mutate(country = recode(country,
+                                             "United States" = "USA",
+                                             "United Kingdom" = "UK",
+                                             "Viet Nam" = "Vietnam",
+                                             "Iran (Islamic Republic of)"= "Iran",
+                                             "T\xfcrkiye" = "Turkey",
+                                             "Czechia" = "Czech Republic",
+                                             "Hong Kong, China (SAR)" = "Hong Kong",
+                                             "Russian Federation" = "Russia",
+                                             "United Arab Emirates" = "UAE",
+                                             "Korea (Republic of)" = "South Korea"))
+
+df_joined = left_join(df, df_idh, by= "Country")
+
+df_joined <- df_joined %>%
+  mutate(Nivel_IDH = case_when(
+    hdi_2023 >= 0.92 ~ "Muy alto desarrollo humano",
+    hdi_2023 >= 0.80 & hdi_2023 < 0.92 ~ "Alto desarrollo humano",
+    hdi_2023 >= 0.70 & hdi_2023 < 0.80 ~ "Desarrollo humano medio",
+    hdi_2023 >= 0.60 & hdi_2023 < 0.70 ~ "Desarrollo humano bajo",
+    hdi_2023 < 0.60 ~ "Muy bajo desarrollo humano",
+    TRUE ~ NA_character_ # Para valores NA o fuera de rango
+  ))
+
+df_joined_definitivo = df_joined
+
+hdi_china <- df_idh %>% filter(Country == "China") %>% pull(hdi_2023) %>% unique()
+hdi_china
+
+df_idh <- df_idh %>%
+  mutate(hdi_2023 = if_else(Country == "Taiwan", hdi_china, hdi_2023))
+
+
+sum(is.na(df_joined$hdi_2023))
+
+#df_joined %>% filter(hdi_2023 == NA)
+view(df_joined)
+
+####
+filtro = df_joined %>% filter(Tuition_USD < 10000, Living_Cost_Index > 75) %>%
+  select(Country, Living_Cost_Index, Tuition_USD, hdi_2023)
+
+view(filtro)
+
+filtro2 = df_joined %>% filter(Tuition_USD < 10000, Rent_USD > 1000) %>%
+  select(Country,  Rent_USD, Tuition_USD, hdi_2023)
+
+view(filtro2)
+
+glimpse(df)
+
+df_joined %>% ggplot(aes(y=Living_Cost_Index))+
+  geom_boxplot(outlier.shape = 21, outlier.fill = "white", outlier.color = "black")+
+  theme+
+  theme(axis.text.x = element_text(angle = 20, hjust=1), legend.position = 'none')
+
+
+ggplot(df_joined, aes(x = Rent_USD, y = Tuition_USD, color = hdi_2023)) +
+  geom_point(, alpha = 0.8) +
+  scale_color_viridis_c() +
+  theme_minimal() +
+  labs(title = "Tuition vs Rent, coloreado por HDI")
+
+ggplot(df_joined, aes(x = Living_Cost_Index, y = Tuition_USD, color = hdi_2023)) +
+  geom_point( alpha = 0.8) +
+  scale_color_viridis_c() +
+  theme_minimal(base_size = 13)+
+  theme(
+    plot.title = element_text(face = "bold", size = 16, hjust = 0.5),
+    plot.title.position = 'plot',
+    axis.title.x = element_text(face = "bold", size = 11),
+    axis.title.y = element_text(face = "bold", size = 11),
+    axis.text = element_text(size = 12, color = "black"),
+    panel.grid.major.y = element_line(color = "grey90"),
+    panel.grid.minor = element_blank()
+  )+
+  labs(title = "Matrícula en USD vs Indice de costo de vida, coloreado por HDI",
+       x= "Indice de costo de vida",
+       y= "Costo de matrícula en USD",
+       label = "HDI 2023")
+
+df_joined = df_joined %>% mutate(hdi_2023 = if_else(Country == "Taiwan", hdi_china, hdi_2023))
+sum(is.na(df_joined$hdi_2023))
+
+# Con estos graficos se ve como se explican los outliers o valores atipicos de los graficos de la presentacion
+# los que aca estan como filtrado 1 y 3
+
+# aca vemos como el indice de desarrollo humano explica esos valores atipicos de alquileres caros
+df_joined %>% ggplot(aes(x=hdi_2023, y=Rent_USD))+
+  geom_point(,alpha=0.4)
+
+
+alquileres_caros_joined = df_joined %>% filter(Rent_USD > 800, Tuition_USD < 5000)
+alquileres_caros_joined %>% ggplot(aes(x=hdi_2023, y=Rent_USD, color=Country))+
+  geom_point(,alpha=0.4)+
+  xlim(0.5, 1)
+
+# el hdi tambien parece explicar (tener relacion) con paises con costos de vida muy caros
+df_joined %>% ggplot(aes(x=hdi_2023, y=Living_Cost_Index))+
+  geom_point(,alpha=0.4)
+```
+
+<!--# Luego de la importación, adecuación y exploración, continuamos con el modelado -->
+
+```{r}
+mod9 = lm(Tuition_USD ~ poly(Living_Cost_Index,2) * hdi_2023 + factor(Country)
+          * factor(Level) + Rent_USD, data=df_joined)
+
+summary(mod9)
+
+anova(mod9, mod8)
+
+colnames(df)
+
+mod_hdi = lm(
+  Tuition_USD ~ poly(Living_Cost_Index, 2) * factor(Country) * factor(Level) +
+    poly(hdi_2023, 2) * Rent_USD,
+  data = df_joined
+)
+
+summary(mod_hdi)
+anova(mod8,mod_hdi)
+
+df_filtered = df_joined %>% filter(Tuition_USD < 2500, Living_Cost_Index > 60)
+unique(df_filtered$Country)
+
+df_filtered = df_filtered %>% filter(Country %in% c('Germany','Switzerland','Austria','Luxembourg'))
+
+df_joined %>% ggplot(aes(x=hdi_2023, y=Living_Cost_Index)) +
+  geom_point(,alpha=0.4)
+
+df_filtered %>% ggplot(aes(x=hdi_2023, y=Living_Cost_Index, color=Country)) +
+  geom_point(,alpha=0.4) +
+  xlim(0.5, 1.00)
+
+
+ggplot(df_joined, aes(x = Rent_USD, y = Tuition_USD, color = hdi_2023)) +
+  geom_point(, alpha = 0.8) +
+  scale_color_viridis_c() +
+  theme_minimal() +
+  labs(title = "Tuition vs Rent, coloreado por HDI")
+
+ggplot(df_joined, aes(x = Living_Cost_Index, y = Tuition_USD, color = hdi_2023)) +
+  geom_point( alpha = 0.8) +
+  scale_color_viridis_c() +
+  theme_minimal() +
+  labs(title = "Tuition vs Living cost index, coloreado por HDI")
+
+#####
+hdi_alto = df_joined %>% filter(hdi_2023 > 0.85, Tuition_USD < 5000)
+
+mod10 = lm(Tuition_USD ~ hdi_2023, data=hdi_alto)
+summary(mod10)
+
+df_joined %>% ggplot(aes(x=hdi_2023, y=Tuition_USD))+
+  geom_point()
+
+# ESTE ES EL MODELO DEFINITIVO (simple)
+mod_simple = lm(Tuition_USD  ~ poly(Living_Cost_Index,2) + region + Nivel_IDH + Rent_USD, data= df_joined)
+summary(mod_simple)
+
+grilla_simple = df_joined %>% select(Tuition_USD, Living_Cost_Index, region, Nivel_IDH, Rent_USD) %>% 
+  add_predictions(model = mod_simple) %>% 
+  add_residuals(model=mod_simple)
+
+grilla_simple %>% ggplot(aes(x=pred, y=resid))+
+  geom_point(alpha=0.4)+
+  geom_abline(slope = 0, color="red")
+
+plot(mod_simple)
+
+grilla_simple %>% ggplot(aes(x = pred, y = Tuition_USD)) +
+  geom_point(alpha = 0.6) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  labs(x = "Predicción", y = "Valor Real", title = "Predicción vs Valor Real")
+
+
+mod_simple2 = lm(Tuition_USD  ~ poly(Living_Cost_Index,2) + region + Nivel_IDH + Rent_USD + category, data= df_joined)
+summary(mod_simple2)
+
+anova(mod_simple, mod_simple2)
+```
+
+#### Limitaciones
+
+-   La calidad y cobertura de los datos pueden variar según el país y el programa, lo que podría afectar la generalización del análisis.
+
+-   Existen outliers y valores atípicos que, aunque reales, pueden sesgar los resultados de los modelos lineales.
+
+-   No se consideraron variables adicionales como políticas migratorias, calidad educativa o financiamiento que influyen en los costos.
+
+-   La categorización de programas y agrupación regional es general y podría simplificarse demasiado para algunos contextos específicos.
+
+-   El análisis no incluye validación externa o conjunto de test para evaluar la robustez predictiva de los modelos.
+
+#### Posibles Pasos a Futuro
+
+-   Incorporar variables socioeconómicas y de calidad educativa para enriquecer la explicación y predicción de costos.
+
+-   Implementar validación cruzada y otros métodos para mejorar el rendimiento de los modelos.
+
+-   Explorar análisis temporales si se dispone de datos longitudinales para estudiar tendencias.
+
+-   Refinar la categorización de programas y regiones, tal vez con clustering o análisis jerárquico.
+
+-   Analizar el impacto de políticas migratorias y becas en la matrícula y costos de vida.
+
+-   Incorporar visualizaciones interactivas para facilitar la exploración de datos y resultados.
+
+[^1] Agradecimiento
+
+[^1]: Este trabajo fue desarrollado por un equipo de cuatro integrantes: Crespi Ramiro, Guardia Axel, Lozano Mateo y Rodriguez Juan Ignacio
+
+    \
+    Se trabajó colaborativamente en la recolección, limpieza de datos, el análisis exploratorio, el modelado estadístico y la creación de visualizaciones.
+
+[^2] Referencias
+
+[^2]: Datasets Utilizados:
+
+    1.  **Cost of International Education:** <https://www.kaggle.com/datasets/adilshamim8/cost-of-international-education/data>
+
+    2.  **Human Development Index:** <https://hdr.undp.org/data-center/documentation-and-downloads>
